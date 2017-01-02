@@ -1,36 +1,6 @@
-#### To kill db connection 
-rm(list=ls())
-
-## lib path
-.libPaths("/home/igp/R/x86_64-pc-linux-gnu-library/3.2")
-
-## to kill db connection 
-library(RMySQL)  
-killDbConnections <- function () {
-  all_cons <- dbListConnections(MySQL())
-  print(all_cons)
-  for(con in all_cons)
-    +  dbDisconnect(con)
-  print(paste(length(all_cons), " connections killed."))
-}
-killDbConnections()
-
-#### start time
-start_time<-Sys.time()
-print(paste("Card to total and luxury product count script started at", start_time, sep = " "))
-
-###install packages
-#install.packages(c("data.table","dplyr","stringr"))
-library(data.table)
-library(dplyr)
-library(stringr)
-
-#### db connections
-dbConnectNewIgp<- function(){
-  igpnewConnProd <<- dbConnect(MySQL(),user='root',password='password', dbname='igpnew', host='127.0.0.1',port=3306)  
-}
-dbConnectNewIgp()
-
+source("packages.R")
+source("database_connection.R")
+source("logging.R")
 
 ####home pages
 fest_urls<-dbGetQuery(igpnewConnProd,'select cu.*, cc.base_level, cc.title from cards_url cu join newigp_master_cards_collection cc on cu.card_id = cc.card_id where cu.type = "Festival";')
