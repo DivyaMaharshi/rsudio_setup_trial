@@ -131,6 +131,7 @@ attributes_similarity_df = attributes_similarity_df[attributes_similarity_df['pr
 # final_df <- merge(rrop_similarity_df,attributes_similarity_df)
 
 
+
 # product similarity based on cards mapping
 distinct_cards <- dbGetQuery(igpnewConnProd, 'select distinct(card_id) from cards_url ')
 datalist_cards_rrop = list()
