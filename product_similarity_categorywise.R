@@ -69,7 +69,7 @@ products_cosine_measure <- function(set_type,distinct_cardid)
         sql_query <-  gsub("c\\(","\\(" , sql_query)
         products_mpl <- dbGetQuery(igpnewConnProd,sql_query)
         
-        
+      
         #merging rrop data with mpl column
         rrop_data = merge(rrop_data,products_mpl,by.x='products_id',by.y='products_id')
         rrop_data[is.na(rrop_data)] <- 0
@@ -107,7 +107,7 @@ products_cosine_measure <- function(set_type,distinct_cardid)
 distinct_cardid <- dbGetQuery(igpnewConnProd, "select distinct(card_id) as cardid from cards_url where type != Category and card_id = 121" ) 
 rrop_similarity_df = do.call(rbind, products_cosine_measure(set_type = TRUE,distinct_cardid))
 
-###
+###### non-rrop 
 distinct_cardid <- dbGetQuery(igpnewConnProd, "select distinct(card_id) as cardid from cards_url where type != Category" )
 attributes_similarity_df = do.call(rbind,products_cosine_measure(set_type = FALSE,distinct_cardid))
 
@@ -144,7 +144,8 @@ top_simil_df <- top_simil_df %>%
   slice(1:5)
 
 ################end ##############################################################################
-
+######## how to rank products based on cosine score #####
+ 
 
 # ###### Hetrogenicity ####################
 # dbConnectNewIgp()
