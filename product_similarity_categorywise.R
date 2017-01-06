@@ -124,19 +124,30 @@ top_simil_df <- top_simil_df[!duplicated(top_simil_df[,c('product1','product2')]
 top_simil_df <- top_simil_df %>%
   group_by(product1,cardid) %>%
   arrange(desc(cosine_simil))  %>%
-  slice(1:50)
+  slice(1:100)
 
 #### for hetrogeneous merge with prod rank   ####
-products <- dbGetQuery(igpnewConnProd, "select prod_id,rank,ptid,ei.flag_hamper,p.products_name_for_url  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and  card_id in (121,19870) order by rank")
+### products 1 price
+products1_price <- dbGetQuery(igpnewConnProd ,"select prod_id,p.products_mrp as product1_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and  card_id =121 order by rank")
+products1_price <- unique(products1_price)
+top_simil_df<- merge(top_simil_df,products1_price,by.x = 'product1', by.y='prod_id')
 
+###product2 price
+products <- dbGetQuery(igpnewConnProd, "select prod_id,rank,ptid,ei.flag_hamper,p.products_name_for_url,p.products_mrp as product2_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and  card_id =121 order by rank")
 ## hampers tagged in multiple ptid ----> do unique 
 products <- products[!duplicated(products$prod_id,products$ptid) ,]
 
-top_simil_df<- merge(top_simil_df,products,by.x = 'product2', by.y='prod_id')
+
+# merge products which are having price greater then or equal to product 1
+top_simil_df = top_simil_df %>%
+  inner_join(products, by = c("product2" = "prod_id")) %>%
+  filter(product2_price >= product1_price)
+
+###select hetrogeneous based on simil/rank
 top_simil_df <- top_simil_df %>%
   group_by(product1,cardid) %>%
   arrange((rank))  %>%
-  slice(1:50)
+  slice(1:100)
 
 ######################### to just have one product per pt in strip of 16 #############################################################
 top_simil_df <- top_simil_df[top_simil_df['product1'] == 521298, ]
@@ -148,9 +159,10 @@ top_simil_df  <- top_simil_df %>%
 #############################make strip of 16 products ###########################################3333
 top_simil_df  <- top_simil_df %>%
   group_by(product1,cardid) %>%
-  arrange((rank))  %>%
+  arrange(desc(cosine_simil))  %>%
   slice(1:16) 
 
+rrop_df <- top_simil_df
 ################end ##############################################################################
 
 
@@ -180,7 +192,6 @@ top_simil_df <- top_simil_df %>%
   group_by(product1,cardid) %>%
   arrange(desc(cosine_simil))  %>%
   slice(1:16)
-
 
 ################end ##############################################################################
 
