@@ -122,7 +122,7 @@ top_simil_df <- top_simil_df[top_simil_df['product1'] ==  217285, ]
 top_simil_df <- top_simil_df %>%
   group_by(product1,cardid) %>%
   arrange(desc(cosine_simil))  %>%
-  slice(1:100)
+  #slice(1:100)
 
 ###for hetrogeneous merge with prod rank 
 ### products 1 price
@@ -139,13 +139,14 @@ products <- products[!duplicated(products$prod_id,products$ptid) ,]
 ### price logic on top of cosine 
 top_simil_df = top_simil_df %>%
   inner_join(products, by = c("product2" = "prod_id")) %>%
-  filter(product2_price >= product1_price | product2_price-product1_price >= -(product1_price * .60) )
+  #filter(product2_price >= product1_price | product2_price-product1_price >= -(product1_price * .60) )
+  filter((product2_price >= product1_price & product2_price <= (product1_price + (product1_price * .40))) | product2_price-product1_price >= -(product1_price * .60) )
 
 ###select hetrogeneous based on simil/rank        
 top_simil_df <- top_simil_df %>%
   group_by(product1,cardid) %>%
   arrange(desc(cosine_simil))  %>%
-  slice(1:40)
+  #slice(1:40)
 
 ######################### to just have count product per pt in strip of 16 #############################################################
 # top_simil_df  <- top_simil_df %>%
