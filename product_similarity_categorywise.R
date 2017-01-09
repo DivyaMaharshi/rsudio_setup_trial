@@ -43,7 +43,7 @@ products_cosine_measure <- function(set_type,distinct_cardid)
       
       ###rrop card_id computre similarity based on  all sets
       if (set_type == TRUE){
-        sql_query = paste("select t1.products_id,t2.label,t1.weightage from newigp_products_to_attr_val t1, newigp_master_attr_vals t2, newigp_master_attr_sets t3 where t1.attr_val_id = t2.id and t2.attr_set_id =t3.id and t3.attr_set_type = 1 and  t1.products_id in (",paste(cardid_products,collapse = ','),")",sep='')
+        sql_query = paste("select t1.products_id,t2.label,t1.weightage from newigp_products_to_attr_val t1, newigp_master_attr_vals t2, newigp_master_attr_sets t3 where t1.attr_val_id = t2.id and t2.attr_set_id =t3.id  and  t1.products_id in (",paste(cardid_products,collapse = ','),")",sep='')
         sql_query <-  gsub("c\\(","\\(" , sql_query)
         rrop_data <- dbGetQuery(igpnewConnProd,sql_query)
        
@@ -105,7 +105,7 @@ products_cosine_measure <- function(set_type,distinct_cardid)
 
 
 ############################################## RROP cards #######################################################
-distinct_cardid <- dbGetQuery(igpnewConnProd, "select distinct(card_id) as cardid from cards_url where type != Category and card_id = 121" ) 
+distinct_cardid <- dbGetQuery(igpnewConnProd, "select distinct(card_id) as cardid from cards_url where type != Category and card_id = 121 " ) 
 rrop_similarity_df = do.call(rbind, products_cosine_measure(set_type = TRUE,distinct_cardid))
 
 ### Calculation
@@ -116,22 +116,22 @@ top_rrop_similarity_df<-rrop_similarity_df %>%
 top_simil_df <- top_rrop_similarity_df
 
 ### for perticular product check 
-top_simil_df <- top_simil_df[top_simil_df['product1'] ==  217285, ]
+top_simil_df <- top_simil_df[top_simil_df['product1'] ==  216968, ]
 
 ### select cosine based 100 products
 top_simil_df <- top_simil_df %>%
   group_by(product1,cardid) %>%
   arrange(desc(cosine_simil))  %>%
-  #slice(1:100)
+  slice(1:100)
 
 ###for hetrogeneous merge with prod rank 
 ### products 1 price
-products1_price <- dbGetQuery(igpnewConnProd ,"select prod_id,p.products_mrp as product1_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and  card_id =121 order by rank")
+products1_price <- dbGetQuery(igpnewConnProd ,"select prod_id,p.products_mrp as product1_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and  card_id = 121 order by rank")
 products1_price <- unique(products1_price)
 top_simil_df    <- merge(top_simil_df,products1_price,by.x = 'product1', by.y='prod_id')
 
 ###product2 price
-products <- dbGetQuery(igpnewConnProd, "select prod_id,rank,ptid,ei.flag_hamper,p.products_name_for_url,p.products_mrp as product2_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and  card_id =121 order by rank")
+products <- dbGetQuery(igpnewConnProd, "select prod_id,rank,ptid,ei.flag_hamper,p.products_name_for_url,p.products_mrp as product2_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and  card_id = 121 order by rank")
 ###hampers tagged in multiple ptid ----> do unique 
 products <- products[!duplicated(products$prod_id,products$ptid) ,]
 
@@ -140,18 +140,19 @@ products <- products[!duplicated(products$prod_id,products$ptid) ,]
 top_simil_df = top_simil_df %>%
   inner_join(products, by = c("product2" = "prod_id")) %>%
   #filter(product2_price >= product1_price | product2_price-product1_price >= -(product1_price * .60) )
-  filter((product2_price >= product1_price & product2_price <= (product1_price + (product1_price * .40))) | product2_price-product1_price >= -(product1_price * .60) )
+  filter(product2_price >= (product1_price - (product1_price * .50)) & product2_price <= (product1_price  + (product1_price * 1.5)))
 
 ###select hetrogeneous based on simil/rank        
 top_simil_df <- top_simil_df %>%
   group_by(product1,cardid) %>%
   arrange(desc(cosine_simil))  %>%
   #slice(1:40)
+  slice(1:16)
 
-######################### to just have count product per pt in strip of 16 #############################################################
+######################### to just have count product per pt in strip of 16 (similar products should be shown) #############################################################
 # top_simil_df  <- top_simil_df %>%
 #   group_by(product1,cardid,ptid) %>%
-#   arrange((rank))  %>%
+#   arrange((cosine_simil))  %>%
 #   slice(1:2)
 
 #############################make strip of 16 products ###########################################
@@ -190,8 +191,9 @@ products <- products[!duplicated(products$prod_id,products$ptid) ,]
  
 #price logic on top of cosine 
 top_simil_df = top_simil_df %>%
-   inner_join(products, by = c("product2" = "prod_id")) %>% 
-  filter((product2_price >= product1_price & product2_price <= (product1_price + (product1_price * .40))) | product2_price-product1_price >= -(product1_price * .60) )
+  inner_join(products, by = c("product2" = "prod_id")) %>% 
+  #filter((product2_price >= product1_price & product2_price <= (product1_price + (product1_price * .40))) | product2_price-product1_price >= -(product1_price * .60) )
+  filter(product2_price >= (product1_price - (product1_price * .30)) & product2_price <= (product1_price  + (product1_price * 1.5)))
 
 
 # arrange per product 20 products in descending order of simil score
