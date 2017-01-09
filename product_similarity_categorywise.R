@@ -118,7 +118,7 @@ top_rrop_similarity_df<-rrop_similarity_df %>%
 # rbind and arrange  per product 20 similar products 
 top_simil_df <- top_rrop_similarity_df
 
- # remove duplicates and keep row with high cosine simil
+# remove duplicates and keep row with high cosine simil
 top_simil_df <- top_simil_df[!duplicated(top_simil_df[,c('product1','product2')]),]
 
 top_simil_df <- top_simil_df %>%
@@ -126,7 +126,7 @@ top_simil_df <- top_simil_df %>%
   arrange(desc(cosine_simil))  %>%
   slice(1:100)
 
-#### for hetrogeneous merge with prod rank   ####
+####for hetrogeneous merge with prod rank ####
 ### products 1 price
 products1_price <- dbGetQuery(igpnewConnProd ,"select prod_id,p.products_mrp as product1_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and  card_id =121 order by rank")
 products1_price <- unique(products1_price)
@@ -141,15 +141,15 @@ products <- products[!duplicated(products$prod_id,products$ptid) ,]
 # merge products which are having price greater then or equal to product 1
 top_simil_df = top_simil_df %>%
   inner_join(products, by = c("product2" = "prod_id")) %>%
-  filter(product2_price >= product1_price)
+  filter(product2_price >= product1_price | product2_price-product1_price >= -(product1_price * .60) )
 
-###select hetrogeneous based on simil/rank
+###select hetrogeneous based on simil/rank        
 top_simil_df <- top_simil_df %>%
   group_by(product1,cardid) %>%
   arrange((rank))  %>%
   slice(1:100)
 
-######################### to just have one product per pt in strip of 16 #############################################################
+######################### to just have count product per pt in strip of 16 #############################################################
 top_simil_df <- top_simil_df[top_simil_df['product1'] == 521298, ]
 top_simil_df  <- top_simil_df %>%
   group_by(product1,cardid,ptid) %>%
