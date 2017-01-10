@@ -33,7 +33,7 @@ products_cosine_measure <- function(set_type,distinct_cardid)
   for (i in 1:nrow(distinct_cardid))
   {
     cardid <- distinct_cardid[i,'cardid']
-    sql_query = paste("select distinct(prod_id) as pid from products p join prod_rank_ds pr on p.products_id = pr.prod_id where p.products_status = 1  and card_id  = ", cardid, sep='')
+    sql_query = paste("select distinct(prod_id) as pid from products p join prod_rank pr on p.products_id = pr.prod_id where p.products_status = 1  and card_id  = ", cardid, sep='')
     cardid_products <- dbGetQuery(igpnewConnProd,sql_query)
     View(cardid_products)
     if(nrow(cardid_products) !=0)
@@ -105,10 +105,10 @@ products_cosine_measure <- function(set_type,distinct_cardid)
 
 
 ############################################## RROP cards #######################################################
-#card_id = 121
-#product_idd =216968
+card_id = 121
+product_idd = 216966
 
-sql_query = "select distinct(card_id) as cardid from cards_url where type != 'Category' "
+sql_query = paste("select distinct(card_id) as cardid from cards_url where type != 'Category' and card_id = ",card_id,sep=' ')
 distinct_cardid <- dbGetQuery(igpnewConnProd, sql_query) 
 rrop_similarity_df = do.call(rbind, products_cosine_measure(set_type = TRUE,distinct_cardid))
 
@@ -121,7 +121,7 @@ top_rrop_similarity_df<-rrop_similarity_df %>%
 top_simil_df <- top_rrop_similarity_df
 
 ### for perticular product check 
-#top_simil_df <- top_simil_df[top_simil_df['product1'] ==  product_idd, ]
+top_simil_df <- top_simil_df[top_simil_df['product1'] ==  product_idd, ]
 
 ### select cosine based 100 products
 top_simil_df <- top_simil_df %>%
@@ -131,13 +131,13 @@ top_simil_df <- top_simil_df %>%
 
 ###for hetrogeneous merge with prod rank 
 ### products 1 price
-sql_query = "select prod_id,p.products_mrp as product1_price  from products p join prod_rank_ds pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1 order by rank"
+sql_query = paste("select prod_id,p.products_mrp as product1_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1 and card_id = ",card_id, "order by rank", sep=' ')
 products1_price <- dbGetQuery(igpnewConnProd ,sql_query)
 products1_price <- unique(products1_price)
 top_simil_df    <- merge(top_simil_df,products1_price,by.x = 'product1', by.y='prod_id')
 
 ###product2 price
-sql_query <- "select prod_id,rank,ptid,ei.flag_hamper,p.products_name_for_url,p.products_mrp as product2_price  from products p join prod_rank_ds pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1 order by rank"
+sql_query <- paste("select prod_id,rank,ptid,ei.flag_hamper,p.products_name_for_url,p.products_mrp as product2_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1 and card_id = ", card_id, "order by rank", sep=' ')
 products <- dbGetQuery(igpnewConnProd,sql_query)
 ###hampers tagged in multiple ptid ----> do unique 
 products <- products[!duplicated(products$prod_id,products$ptid) ,]
@@ -147,7 +147,7 @@ products <- products[!duplicated(products$prod_id,products$ptid) ,]
 top_simil_df = top_simil_df %>%
   inner_join(products, by = c("product2" = "prod_id")) %>%
   #filter(product2_price >= product1_price | product2_price-product1_price >= -(product1_price * .60) )
-  filter(product2_price >= (product1_price - (product1_price * .50)) & product2_price <= (product1_price  + (product1_price * 1.5)))
+  filter(product2_price >= (product1_price - (product1_price * .25)) & product2_price <= (product1_price  + (product1_price * 1.3)))
 
 ###select hetrogeneous based on simil/rank        
 top_simil_df <- top_simil_df %>%
@@ -184,15 +184,15 @@ top_attributes_similarity_df <- attributes_similarity_df %>%
 
 # rbind and arrange  per product 20 similar products 
 top_simil_df <- top_attributes_similarity_df
-#top_simil_df <- top_simil_df[top_simil_df['product1'] ==  522976, ]
+top_simil_df <- top_simil_df[top_simil_df['product1'] ==  522976, ]
 
 ####### price calculation 
-products1_price <- dbGetQuery(igpnewConnProd ,"select prod_id,p.products_mrp as product1_price  from products p join prod_rank_ds pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and p.products_status = 1  order by rank")
+products1_price <- dbGetQuery(igpnewConnProd ,"select prod_id,p.products_mrp as product1_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and p.products_status = 1  order by rank")
 products1_price <- unique(products1_price)
 top_simil_df    <- merge(top_simil_df,products1_price,by.x = 'product1', by.y='prod_id')
 
 ###product2 price
-products <- dbGetQuery(igpnewConnProd, "select prod_id,rank,ptid,ei.flag_hamper,p.products_name_for_url,p.products_mrp as product2_price  from products p join prod_rank_ds pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and p.products_status = 1 order by rank")
+products <- dbGetQuery(igpnewConnProd, "select prod_id,rank,ptid,ei.flag_hamper,p.products_name_for_url,p.products_mrp as product2_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and p.products_status = 1 order by rank")
 ## hampers tagged in multiple ptid ----> do unique 
 products <- products[!duplicated(products$prod_id,products$ptid) ,]
 
