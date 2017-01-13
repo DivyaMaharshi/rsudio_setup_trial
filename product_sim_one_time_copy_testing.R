@@ -1,6 +1,6 @@
-# source("packages.R")
-# source("database_connection.R")
-# source("logging.R")
+source("packages.R")
+source("database_connection.R")
+source("logging.R")
 
 
 ### url parser ####
@@ -33,10 +33,32 @@ create_tdm<-function(text_field){
   #td.mat <- removeSparseTerms(dtm, 0.1)
 }
 
+lsa_m <- function (x, dims = dimcalc_share()) 
+{
+  SVD = svd(x)
+  if (is.function(dims)) {
+    dims = dims(SVD$d)
+  }
+  if (dims < 2) 
+    dims = 2
+  
+  # if (any(SVD$d <= sqrt(.Machine$double.eps))) {
+  #   warning("[lsa] - there are singular values which are zero.")
+  # }
+  space = NULL
+  space$tk = SVD$u[, 1:dims]
+  space$dk = SVD$v[, 1:dims]
+  space$sk = SVD$d[1:dims]
+  rownames(space$tk) = rownames(x)
+  rownames(space$dk) = colnames(x)
+  class(space) = "LSAspace"
+  return(space)
+}
 
+#### text cosine computation
 text_cosine_similarity <- function(td.mat,products_text){
   # MDS with LSA
-  lsaSpace <- lsa(td.mat)  # create LSA space
+  lsaSpace <- lsa_m(td.mat)  # create LSA space
   dist.mat.lsa <- dist(t(as.textmatrix(lsaSpace))) 
   # compute distance matrix
   df.dist=as.matrix(dist.mat.lsa, labels=TRUE)
@@ -55,7 +77,6 @@ text_cosine_similarity <- function(td.mat,products_text){
   colnames(output) <- c('product1','product2','text_cosine_simil','product1_text','product2_text')
   return(output)
 }
-
 
 
 ### Main function to compute similarity
@@ -97,7 +118,7 @@ products_cosine_measure <- function(set_type,distinct_cardid)
         sql_query <-  gsub("c\\(","\\(" , sql_query)
         rrop_data <- dbGetQuery(igpnewConnProd,sql_query)
         View(rrop_data)
-        xx <- rrop_data
+        xx <- rrop_data 
         
       }
       ### category compute similarity based on attributes only , rrop not required
@@ -115,7 +136,7 @@ products_cosine_measure <- function(set_type,distinct_cardid)
       if(nrow(rrop_data) != 0)
       {
         rrop_data <- unique(rrop_data)
-        rrop_data <- dcast(rrop_data,  products_id ~ label,value.var='weightage')
+        rrop_data <- dcast(rrop_data,  products_id ~ label, value.var='weightage' , fun=mean)
         
         ## Addition of MPL to the output
         sql_query = paste("select products_id,products_mrp from products where  products_id in (", paste(cardid_products,collapse = ','), ')', sep='')
@@ -161,11 +182,11 @@ products_cosine_measure <- function(set_type,distinct_cardid)
 
 
 ############################################## RROP cards #######################################################
-card_id = 121
-product_idd = 520185
+card_id = 152
+product_idd = 521458
 
 sql_query = paste("select distinct(card_id) as cardid from cards_url where type != 'Category' and card_id = ",card_id,sep=' ')
-distinct_cardid <- dbGetQuery(igpnewConnProd, sql_query) 
+distinct_cardid <- dbGetQuery(igpnewConnProd, sql_query)
 rrop_similarity_df = do.call(rbind, products_cosine_measure(set_type = TRUE,distinct_cardid))
 rrop_similarity_df$cosine_simil <- rrop_similarity_df$cosine_simil + rrop_similarity_df$text_cosine_simil
 rrop_similarity_df <- rrop_similarity_df[-5]
@@ -173,20 +194,20 @@ rrop_similarity_df <- rrop_similarity_df[-5]
 ### Calculation
 ### cosine arrange
 top_rrop_similarity_df<-rrop_similarity_df %>%
-  group_by(product1,cardid) %>%
-  arrange(desc(cosine_simil))
+group_by(product1,cardid) %>%
+arrange(desc(cosine_simil))
 top_simil_df <- top_rrop_similarity_df
 
-### for perticular product check 
+### for perticular product check
 top_simil_df <- top_simil_df[top_simil_df['product1'] ==  product_idd, ]
 
 ### select cosine based 100 products
 top_simil_df <- top_simil_df %>%
-  group_by(product1,cardid) %>%
-  arrange(desc(cosine_simil))  %>%
-  slice(1:100)
+group_by(product1,cardid) %>%
+arrange(desc(cosine_simil))  %>%
+slice(1:100)
 
-###for hetrogeneous merge with prod rank 
+###for hetrogeneous merge with prod rank
 ### products 1 price
 sql_query = paste("select prod_id,p.products_mrp as product1_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1 and card_id = ",card_id, "order by rank", sep=' ')
 products1_price <- dbGetQuery(igpnewConnProd ,sql_query)
@@ -196,21 +217,21 @@ top_simil_df    <- merge(top_simil_df,products1_price,by.x = 'product1', by.y='p
 ###product2 price
 sql_query <- paste("select prod_id,rank,ptid,ei.flag_hamper,p.products_name_for_url,p.products_mrp as product2_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1 and card_id = ", card_id, "order by rank", sep=' ')
 products <- dbGetQuery(igpnewConnProd,sql_query)
-###hampers tagged in multiple ptid ----> do unique 
+###hampers tagged in multiple ptid ----> do unique
 products <- products[!duplicated(products$prod_id,products$ptid) ,]
 
 
-### price logic on top of cosine 
+### price logic on top of cosine
 top_simil_df = top_simil_df %>%
-  inner_join(products, by = c("product2" = "prod_id")) %>%
-  #filter(product2_price >= product1_price | product2_price-product1_price >= -(product1_price * .60) )
-  filter(product2_price >= (product1_price - (product1_price * .25)) & product2_price <= (product1_price  + (product1_price * 1.3)))
+inner_join(products, by = c("product2" = "prod_id")) %>%
+#filter(product2_price >= product1_price | product2_price-product1_price >= -(product1_price * .60) )
+filter(product2_price >= (product1_price - (product1_price * .25)) & product2_price <= (product1_price  + (product1_price * 1.3)))
 
-###select hetrogeneous based on simil/rank        
+###select hetrogeneous based on simil/rank
 top_simil_df <- top_simil_df %>%
-  group_by(product1,cardid) %>%
-  arrange(desc(cosine_simil))  %>%
-  slice(1:40)
+group_by(product1,cardid) %>%
+arrange(desc(cosine_simil))  %>%
+slice(1:30)
 
 ######################### to just have count product per pt in strip of 16 (similar products should be shown) #############################################################
 # top_simil_df  <- top_simil_df %>%
@@ -227,83 +248,52 @@ top_simil_df  <- top_simil_df %>%
 rrop_final_df <- top_simil_df
 #################end ##############################################################################
 
+
 ###### for categories 
-distinct_cardid <- dbGetQuery(igpnewConnProd, "select distinct(card_id) as cardid from cards_url where type != Category " )
+distinct_cardid <- dbGetQuery(igpnewConnProd, "select distinct(card_id) as cardid from cards_url where type != Category and card_id = 10987" )
 attributes_similarity_df = do.call(rbind,products_cosine_measure(set_type = FALSE,distinct_cardid))
+attributes_similarity_df$cosine_simil <- attributes_similarity_df$cosine_simil + attributes_similarity_df$text_cosine_simil
+attributes_similarity_df <- attributes_similarity_df[-5]
+
 
 #################   calculations 
 top_attributes_similarity_df <- attributes_similarity_df %>%
-  group_by(product1,cardid) %>%
-  arrange(desc(cosine_simil)) 
+group_by(product1,cardid) %>%
+arrange(desc(cosine_simil)) 
 
 # rbind and arrange  per product 20 similar products 
 top_simil_df <- top_attributes_similarity_df
-top_simil_df <- top_simil_df[top_simil_df['product1'] ==  522976, ]
+top_simil_df <- top_simil_df[top_simil_df['product1'] ==  215504, ]
 
 ####### price calculation 
-products1_price <- dbGetQuery(igpnewConnProd ,"select prod_id,p.products_mrp as product1_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and p.products_status = 1  order by rank")
+products1_price <- dbGetQuery(igpnewConnProd ,"select prod_id,p.products_mrp as product1_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and p.products_status = 1 and card_id = 10987 order by rank")
 products1_price <- unique(products1_price)
 top_simil_df    <- merge(top_simil_df,products1_price,by.x = 'product1', by.y='prod_id')
 
 ###product2 price
-products <- dbGetQuery(igpnewConnProd, "select prod_id,rank,ptid,ei.flag_hamper,p.products_name_for_url,p.products_mrp as product2_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and p.products_status = 1 order by rank")
+products <- dbGetQuery(igpnewConnProd, "select prod_id,rank,ptid,ei.flag_hamper,p.products_name_for_url,p.products_mrp as product2_price  from products p join prod_rank pr  on p.products_id = pr.prod_id join product_cat pc on p.products_id = pc.pid join newigp_category_extra_info ci on pc.ptid = ci.categories_id join newigp_product_extra_info ei on pr.prod_id = ei.products_id where ci.cat_type =1  and p.products_status = 1 and card_id = 10987 order by rank")
 ## hampers tagged in multiple ptid ----> do unique 
 products <- products[!duplicated(products$prod_id,products$ptid) ,]
 
 #price logic on top of cosine 
 top_simil_df = top_simil_df %>%
   inner_join(products, by = c("product2" = "prod_id")) %>% 
-  #filter((product2_price >= product1_price & product2_price <= (product1_price + (product1_price * .40))) | product2_price-product1_price >= -(product1_price * .60) )
-  filter(product2_price >= (product1_price - (product1_price * .30)) & product2_price <= (product1_price  + (product1_price * 1.5)))
+  filter(product2_price >= (product1_price - (product1_price * .25)) & product2_price <= (product1_price  + (product1_price * 1.5)))
 
 
-# arrange per product 20 products in descending order of simil score
+#arrange per product 20 products in descending order of simil score
 top_simil_df <- top_simil_df %>%
   group_by(product1,cardid) %>%
   arrange(desc(cosine_simil)) %>%
-  slice(1:16)
+  slice(1:30)
+
+##### based on rank hetrogenous 
+top_simil_df  <- top_simil_df %>%
+   group_by(product1,cardid) %>%
+   arrange(rank)  %>%
+   slice(1:16)
+ 
 
 category_final_df <- top_simil_df
 ################end ##############################################################################
-
-
-################### url wise
-#top_simil_df$url <- strsplit(top_simil_df$products_name_for_url,"-")[[1]][(length(strsplit(top_simil_df$products_name_for_url,"-"))-3) : (length(strsplit(top_simil_df$products_name_for_url,"-"))-1)] 
-#x <- top_simil_df
-#x$url <- strsplit(top_simil_df$products_name_for_url,"-")
-#x$new_url = ''
-#x$new_url <- x$url[[1]][(length(x$url[[1]])-3):(length(x$url[[1]])-1)]
-
-#for (i in 1:5)
-#{
-#  x$new_url[i] <- x$url[i][[1]][(length(x$url[i][[1]])-3):(length(x$url[i][[1]])-1)]
-#}
-
-####### Hetrogenicity by flag_hamper ####################
-
-# with_flag_hamper <- top_simil_df[top_simil_df['flag_hamper'] == 1 ,]
-# with_flag_hamper <- with_flag_hamper[!duplicated(with_flag_hamper$ptid) ,]
-# 
-# without_flag_hamper <- top_simil_df[top_simil_df['flag_hamper'] == 0 ,]
-# without_flag_hamper <- without_flag_hamper[!duplicated(without_flag_hamper$ptid),]
-# 
-# final_df <- rbind(with_flag_hamper,without_flag_hamper)
-# 
-
-
-################################################## het by file attr 
-# dbConnectNewIgp()
-# sql_query = "select t1.products_id,t2.label product_label,t3.label as set_label,t2.attr_set_id from products p, newigp_products_to_attr_val t1, newigp_master_attr_vals t2, newigp_master_attr_sets t3 where p.products_id = t1.products_id and t1.attr_val_id = t2.id and t2.attr_set_id = t3.id and p.products_status = 1 and t3.attr_set_type != 1 "
-# sql_query <-  gsub("c\\(","\\(" , sql_query)
-# label_data <- dbGetQuery(igpnewConnProd,sql_query)
-# 
-# ## temp_merge
-# label_top_simil_df <- merge(top_simil_df,label_data,by.x='product2',by.y='products_id')
-# 
-# ### read het level data
-# pt_level_het_data<-read.csv(paste(getwd(),"/pt_level_attr.csv",sep='') , header = TRUE)
-# 
-# ##merge
-# pt_level_het_label_data <- merge(label_top_simil_df,pt_level_het_data,by.x= c('ptid','attr_set_id'), by.y=c('pt_id','attr_set_id'))
-
 
