@@ -249,7 +249,7 @@ rrop_final_df <- top_simil_df
 #################end ##############################################################################
 
 
-###### for categories 
+###### for categories  
 distinct_cardid <- dbGetQuery(igpnewConnProd, "select distinct(card_id) as cardid from cards_url where type != Category and card_id = 10987" )
 attributes_similarity_df = do.call(rbind,products_cosine_measure(set_type = FALSE,distinct_cardid))
 attributes_similarity_df$cosine_simil <- attributes_similarity_df$cosine_simil + attributes_similarity_df$text_cosine_simil
@@ -282,10 +282,11 @@ top_simil_df = top_simil_df %>%
 
 
 #arrange per product 20 products in descending order of simil score
+# selecting only 16 products change it to 30 if required
 top_simil_df <- top_simil_df %>%
   group_by(product1,cardid) %>%
   arrange(desc(cosine_simil)) %>%
-  slice(1:30)
+  slice(1:16)
 
 ##### based on rank hetrogenous 
 top_simil_df  <- top_simil_df %>%
@@ -293,7 +294,6 @@ top_simil_df  <- top_simil_df %>%
    arrange(rank)  %>%
    slice(1:16)
  
-
 category_final_df <- top_simil_df
 ################end ##############################################################################
 
