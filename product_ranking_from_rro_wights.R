@@ -183,6 +183,8 @@ card_prod_score$old_normalized<-ifelse(is.na(card_prod_score$old_normalized)==TR
 card_prod_score$old_normalized<-ifelse(card_prod_score$prod_id > 500000 & card_prod_score$old_normalized == 0,(sample(30, size = nrow(card_prod_score), replace = TRUE)+15)/100,card_prod_score$old_normalized)
 card_prod_score$final_score<-card_prod_score$score*.2+card_prod_score$old_normalized*.8
 
+####update prod_ds table with actual highest score
+
 pt_level_het<-read.csv(paste(getwd(),"/ml/Production_scripts_CS/csv/pt_attr_set_for_het.csv",sep=''))
 prod_attr<-merge(prod_attr,pt_level_het[c("pt_id","attr_set_id")],by.x = "attr_set_id", by.y = "attr_set_id")
 ex_at<-merge(extra[c("pid","boost")],prod_attr[c("pid","aid")],by.x="pid",by.y="pid")
@@ -247,10 +249,12 @@ for (i in 1:iter_max) {
     print(paste("iteration",i,"completed"))
   }
 }
+
 card_prod_score<-card_prod_score_final
 rm(card_prod_score_final)
 rm(card_prod_score_orig)
 ##### fix ends ######  
+
 
 dbConnectNewIgp()
 prod_rank_ds<- card_prod_score[c('card_id','prod_id','rank')]

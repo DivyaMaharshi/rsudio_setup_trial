@@ -1,3 +1,8 @@
+### algo code 
+## top 10 relevant products based on sales and revenue and het concept.
+## top 10 new arrivals based on recently added products to that card and het concept introduced
+
+
 ###  load libraries 
 library(logging)
 
@@ -11,7 +16,7 @@ rm(list=ls())
 .libPaths("/home/igp/R/x86_64-pc-linux-gnu-library/3.2")
 
 ### list of packages required for the session
-packages_required= c("RMySQL","reshape2","magrittr","dplyr","stringr","stringi")
+packages_required= c("RMySQL","reshape2","magrittr","dplyr","stringr","stringi","plyr", "dplyr")
 
 ### install from CRAN , if not already installed
 install_check<- packages_required %in% installed.packages()
@@ -27,7 +32,7 @@ lapply(packages_required, FUN = function(X) {
 lapply( dbListConnections(dbDriver( drv = "MySQL")), dbDisconnect)
 # function to establish MySqlconnection with R server
 dbConnectNewIgp<- function(){
-  igpnewConnProd <<- dbConnect(MySQL(),user='prod-ds',password='ML3Ghn@qw123fw', dbname='igpnew', host='igp-prod.cdlzhqutobeq.us-east-1.rds.amazonaws.com')  
+  igpnewConnProd <<- dbConnect(MySQL(),user='root',password='password', dbname='igpnew', host='127.0.0.1',port=3306)  
 }
 dbConnectNewIgp()
 
@@ -37,60 +42,71 @@ todays_date <- Sys.Date()
 last_three_months <- todays_date - 90
 
 #####DB Queries 
-sql_query <- paste("SELECT count(op.products_id) sale_count, op.products_id, p.products_mrp, count(op.products_id)*p.products_mrp as revenue , p.products_name_for_url FROM orders o join orders_products op  on o.orders_id = op.orders_id join products p on op.products_id = p.products_id and o.fk_associate_id = 5  and o.orders_status not in ('Cancelled') and date(o.date_purchased) >=", last_three_months, " GROUP BY op.products_id ")
-sales_history <- dbGetQuery(igpnewConnProd, sql_query)
-prod_rank <- dbGetQuery(igpnewConnProd,"select pr.card_id,prod_id,cu.url from prod_rank pr join cards_url cu on pr.card_id = cu.card_id")
-home_page_dataframe <- dbGetQuery(igpnewConnProd,"select distinct(prod_id) from prod_rank")
-home_page_dataframe$card_id <- 0
-home_page_dataframe$url <- 'home'
-prod_rank <- rbind(prod_rank,home_page_dataframe)
+
+sales_history <- dbGetQuery(igpnewConnProd, paste("SELECT count(op.products_id) sale_count, op.products_id, p.products_mrp, count(op.products_id)*p.products_mrp as revenue , p.products_name_for_url FROM orders o join orders_products op  on o.orders_id = op.orders_id join products p on op.products_id = p.products_id and o.fk_associate_id = 5  and o.orders_status not in ('Cancelled') and date(o.date_purchased) >=", last_three_months, " GROUP BY op.products_id "))
+prod_rank <- dbGetQuery(igpnewConnProd,"select * from prod_rank ")
+card_mapping<-dbGetQuery(igpnewConnProd,'select * from cards_parent_to_child_mapping')
+top_card_products <- dbGetQuery(igpnewConnProd, "select * from prod_rank_ds")
+
+
+#### merging and manipulations 
+pr_card_mapping <- merge(x = card_mapping,y=prod_rank,by.x="card_id_n",by.y = "card_id")
+pr_card_mapping <- pr_card_mapping[order(pr_card_mapping$card_id_n,pr_card_mapping$rank),]
+####ensure product mapped to multiple cards can have diff ranking  so take lower rank and provide uniqueness
+pr_card_mapping <- ddply(pr_card_mapping, c("card_url_p","prod_id"), function(pr_card_mapping) return(pr_card_mapping[pr_card_mapping$rank==min(pr_card_mapping$rank),]))
+pr_card_mapping <- pr_card_mapping[!duplicated(pr_card_mapping[,c('card_url_p','prod_id')]),]
+sales_pr_card_mapping <- merge(pr_card_mapping,sales_history,by.x='prod_id',by.y='products_id')
+sales_pr_card_mapping <- sales_pr_card_mapping[c('card_id_p','card_url_p','prod_id','rank','sale_count','products_mrp','revenue','products_name_for_url')]
+
 
 ### correlation between salecount and revenue
-# plot(sales_history$sale_count,sales_history$revenue) 
-# cor(sales_history$sale_count,sales_history$revenue)   ##.81 linearly higly correlated 
+# plot(sales_pr_card_mapping$sale_count,sales_pr_card_mapping$revenue) 
+# cor(sales_pr_card_mapping$sale_count,sales_pr_card_mapping$revenue)   ##.46 linearly correlated 
 
-#### normalize
-sales_history$normalized_sale_count <- sapply(sales_history$sale_count,function(x) (x-min(sales_history$sale_count))/(max(sales_history$sale_count)-min(sales_history$sale_count)))
-sales_history$normalized_revenue <- sapply(sales_history$revenue,function(x) (x-min(sales_history$revenue))/(max(sales_history$revenue)-min(sales_history$revenue)))
-sales_history$total_normalized <- 0.5 * sales_history$normalized_sale_count + 0.5 * sales_history$normalized_revenue
-
-### scale
-# sales_history$scaled_sale_count <- scale(sales_history$sale_count) 
-# sales_history$scaled_revenue <- scale(sales_history$revenue)
- 
-### normal distribution
-# sales_history$rnorm_sale_count <- rnorm(sales_history$sale_count , mean = 0 ,sd= 1 ) 
-# sales_history$rnorm_revenue <- rnorm(sales_history$revenue , mean = 0, sd = 1)
-# sales_history$total_rnorm_normalized <- sales_history$rnorm_sale_count + sales_history$rnorm_revenue
-# sales_history <- sales_history[order(-sales_history$total_rnorm_normalized),]
-# sales_history_rnorm <- sales_history[1:20,]
-
-
-#######merge
-prod_rank_sales_history <- merge(prod_rank,sales_history, by.x='prod_id',by.y='products_id')
+#### normalize 
+####  impact of product sale count  among all products sale count 
+####  impact of product revenue  among all products revenue
+sales_pr_card_mapping$normalized_sale_count <- sapply(sales_pr_card_mapping$sale_count,function(x) (x-min(sales_pr_card_mapping$sale_count))/(max(sales_pr_card_mapping$sale_count)-min(sales_pr_card_mapping$sale_count)))
+sales_pr_card_mapping$normalized_revenue <- sapply(sales_pr_card_mapping$revenue,function(x) (x-min(sales_pr_card_mapping$revenue))/(max(sales_pr_card_mapping$revenue)-min(sales_pr_card_mapping$revenue)))
+sales_pr_card_mapping$total_normalized <- 0.6 * sales_pr_card_mapping$normalized_sale_count + 0.4 * sales_pr_card_mapping$normalized_revenue
+till_now<-sales_pr_card_mapping
+#sales_pr_card_mapping <- till_now
 
 ### type 0  for top 10 relevant products
-prod_rank_sales_history$type <- 0
+sales_pr_card_mapping$type <- 0
 ### arrange in desc total normalized 
-prod_rank_sales_history <- prod_rank_sales_history %>% 
-  group_by(card_id) %>% 
+sales_pr_card_mapping <- sales_pr_card_mapping %>% 
+  group_by(card_url_p) %>% 
   arrange(desc(total_normalized)) %>%
+  slice(1:30)
+sales_pr_card_mapping <- sales_pr_card_mapping %>% 
+  group_by(card_url_p) %>% 
+  arrange(rank) %>%
   slice(1:10)
-prod_rank_sales_history$rank <-  with(prod_rank_sales_history, ave(card_id, card_id, FUN = seq_along))
-prod_rank_sales_history <- prod_rank_sales_history[c('url','type','prod_id','rank','products_name_for_url')]
-prod_rank_sales_history$id <- seq(1:nrow(prod_rank_sales_history))
-prod_rank_sales_history <- prod_rank_sales_history[c('id','url','type','prod_id','rank','products_name_for_url')]
+
+#sales_pr_card_mapping$seq_rank <-  with(sales_pr_card_mapping, ave(card_id_p, card_id_p, FUN = seq_along))
+#sales_pr_card_mapping <- sales_pr_card_mapping[c('url','type','prod_id','seq_rank','products_name_for_url')]
+#sales_pr_card_mapping$id <- seq(1:nrow(sales_pr_card_mapping))
+#sales_pr_card_mapping <- sales_pr_card_mapping[c('id','url','type','prod_id','seq_rank','products_name_for_url')]
 
 
-###### writing to db 
+#####################Top New Arrivals #####################################
 dbConnectNewIgp()
-#clear db
-dbSendQuery(igpnewConnProd,"delete from newigp_top_product")
-#### write to db
-dbWriteTable(conn = igpnewConnProd,name = "newigp_top_product",value = newigp_top_product,append=T,row.names=FALSE)
-###disconnect all connections
-lapply( dbListConnections( dbDriver( drv = "MySQL")), dbDisconnect)
-loginfo('Editors pick products run finished')
-end_time<-Sys.time()
-print(paste("TOTAL TIME TAKEN by Editor's Pick script =", difftime(end_time,start_time,units = "mins"),"mins",sep = " "))
+### twist top/new or new/top
+prod_rank <- dbGetQuery(igpnewConnProd,"select pr.card_id,pr.prod_id,pr.rank,p.products_date_added,p.products_name_for_url from prod_rank pr join products p on pr.prod_id = p.products_id and p.products_status=1 ")
+card_mapping<-dbGetQuery(igpnewConnProd,'select * from cards_parent_to_child_mapping where card_url_p = "birthday-gifts" ')
+#### merging and manipulations 
+pr_card_mapping <- merge(x = card_mapping,y=prod_rank,by.x="card_id_n",by.y = "card_id")
+pr_card_mapping <- ddply(pr_card_mapping, c("card_url_p","prod_id"), function(pr_card_mapping) return(pr_card_mapping[pr_card_mapping$rank==min(pr_card_mapping$rank),]))
+pr_card_mapping <- pr_card_mapping[!duplicated(pr_card_mapping[,c('card_url_p','prod_id')]),]
+pr_card_mapping <- pr_card_mapping[c('card_id_p','card_url_p','prod_id','rank','products_date_added','products_name_for_url')]
 
+
+pr_card_mapping <- pr_card_mapping %>% 
+  group_by(card_url_p) %>% 
+  arrange(desc(products_date_added)) %>%
+  slice(1:50)
+pr_card_mapping <- pr_card_mapping %>% 
+  group_by(card_url_p) %>% 
+  arrange(rank) %>%
+  slice(1:10)
