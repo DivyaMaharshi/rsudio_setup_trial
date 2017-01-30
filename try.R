@@ -77,7 +77,7 @@ prod_rank_sales_history <- prod_rank_sales_history %>%
   arrange(desc(total_normalized)) %>%
   slice(1:10)
 prod_rank_sales_history$rank <-  with(prod_rank_sales_history, ave(card_id, card_id, FUN = seq_along))
-prod_rank_sales_history <- prod_rank_sales_history[c('url','type','prod_id','rank','products_name_for_url')]
+prod_rank_sales_history  <- prod_rank_sales_history[c('url','type','prod_id','rank','products_name_for_url')]
 prod_rank_sales_history$id <- seq(1:nrow(prod_rank_sales_history))
 prod_rank_sales_history <- prod_rank_sales_history[c('id','url','type','prod_id','rank','products_name_for_url')]
 

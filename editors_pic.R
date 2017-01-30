@@ -39,7 +39,7 @@ dbConnectNewIgp()
 
 ###date
 todays_date <- Sys.Date()
-last_three_months <- todays_date - 90
+last_three_months <- todays_date - 30
 
 #####DB Queries 
 
@@ -58,6 +58,13 @@ pr_card_mapping <- pr_card_mapping[!duplicated(pr_card_mapping[,c('card_url_p','
 sales_pr_card_mapping <- merge(pr_card_mapping,sales_history,by.x='prod_id',by.y='products_id')
 sales_pr_card_mapping <- sales_pr_card_mapping[c('card_id_p','card_url_p','prod_id','rank','sale_count','products_mrp','revenue','products_name_for_url')]
 
+x <- 5
+while (x > 0)
+{
+  x <- x - 1
+  print(x)
+}
+
 
 ### correlation between salecount and revenue
 # plot(sales_pr_card_mapping$sale_count,sales_pr_card_mapping$revenue) 
@@ -67,7 +74,7 @@ sales_pr_card_mapping <- sales_pr_card_mapping[c('card_id_p','card_url_p','prod_
 ####  impact of product sale count  among all products sale count 
 ####  impact of product revenue  among all products revenue
 sales_pr_card_mapping$normalized_sale_count <- sapply(sales_pr_card_mapping$sale_count,function(x) (x-min(sales_pr_card_mapping$sale_count))/(max(sales_pr_card_mapping$sale_count)-min(sales_pr_card_mapping$sale_count)))
-sales_pr_card_mapping$normalized_revenue <- sapply(sales_pr_card_mapping$revenue,function(x) (x-min(sales_pr_card_mapping$revenue))/(max(sales_pr_card_mapping$revenue)-min(sales_pr_card_mapping$revenue)))
+sales_pr_card_mapping$normalized_revenue <- unlist(lapply(sales_pr_card_mapping$revenue,function(x) (x-min(sales_pr_card_mapping$revenue))/(max(sales_pr_card_mapping$revenue)-min(sales_pr_card_mapping$revenue))))
 sales_pr_card_mapping$total_normalized <- 0.6 * sales_pr_card_mapping$normalized_sale_count + 0.4 * sales_pr_card_mapping$normalized_revenue
 till_now<-sales_pr_card_mapping
 #sales_pr_card_mapping <- till_now
@@ -78,7 +85,7 @@ sales_pr_card_mapping$type <- 0
 sales_pr_card_mapping <- sales_pr_card_mapping %>% 
   group_by(card_url_p) %>% 
   arrange(desc(total_normalized)) %>%
-  slice(1:30)
+  slice(1:20)
 sales_pr_card_mapping <- sales_pr_card_mapping %>% 
   group_by(card_url_p) %>% 
   arrange(rank) %>%
