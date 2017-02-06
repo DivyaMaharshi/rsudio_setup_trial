@@ -9,7 +9,7 @@ library(cluster)
 library(fpc)
 
 train <- read.csv('/home/igp/Downloads/train.csv', header=TRUE)
-#test <- read.csv('/home/igp/Downloads/test.csv', header=TRUE)
+test <- read.csv('/home/igp/Downloads/test.csv', header=TRUE)
 
 #####sampling && printing
 set.seed(71)
@@ -54,11 +54,22 @@ for (i in 0:9)
 }
 final_train_set<-as.data.frame(final_train_set)
 
-X_train <- final_train_set[,-1]
-Y_train <- final_train_set[,1]
-table (Y_train)
+#X_train <- final_train_set[,-1]
+#Y_train <- final_train_set[,1]
+#table (Y_train)
 
-rm(digit,cluster,new_data,i,raw_train_set,final_train_set)
+rm(digit,cluster,new_data,i,raw_train_set)
+final_train_set <- round(final_train_set)
+row.names(final_train_set) <- seq(1:nrow(final_train_set))
+View(final_train_set)
 
+#### random forest predictions
+rf   <-  randomForest(V1~.,data=final_train_set,ntree=500)
+#### predictions
+pred <- predict(rf,X_test)
+
+
+prediction <- data.frame(ImageId=1:nrow(test),Label=as.integer(pred))
+write.csv(prediction, "rf_benchmark.csv")
 
 
