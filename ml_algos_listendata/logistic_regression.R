@@ -48,11 +48,33 @@ row.names(std.Coeff) = NULL
 final = merge(summary.coeff, std.Coeff, by = "Variable", all.x = TRUE)
 
 #Prediction
-pred = predict(mylogit,val, type = "response")
+pred = predict(mylogit,val[,-(1)], type = "response")
 finaldata = cbind(val, pred)
 
 #Storing Model Performance Scores
 library(ROCR)
 pred_val <-prediction(pred ,finaldata$admit)
 
+# Maximum Accuracy and prob. cutoff against it
+acc.perf <- performance(pred_val, "acc")
+ind = which.max( slot(acc.perf, "y.values")[[1]])
+acc = slot(acc.perf, "y.values")[[1]][ind]
+cutoff = slot(acc.perf, "x.values")[[1]][ind]
 
+# Print Results
+print(c(accuracy= acc, cutoff = cutoff))
+
+# Calculating Area under Curve
+perf_val <- performance(pred_val,"auc")
+perf_val
+
+# Plotting Lift curve
+plot(performance(pred_val, measure="lift", x.measure="rpp"), colorize=TRUE)
+
+# Plot the ROC curve
+perf_val2 <- performance(pred_val, "tpr", "fpr")
+plot(perf_val2, col = "green", lwd = 1.5)
+
+#Calculating KS statistics
+ks1.tree <- max(attr(perf_val2, "y.values")[[1]] - (attr(perf_val2, "x.values")[[1]]))
+ks1.tree
