@@ -37,7 +37,7 @@ cat("number of clusters estimated by optimum average silhouette width:", pamkClu
 #Method III : Scree plot to determine the number of clusters
 #wss <- (nrow(data)-1)*sum(apply(data,2,var))
 for (i in 2:15) {
-  print((kmeans(data,centers=i)$betweenss))
+  wss[i] <- (kmeans(data,centers=i)$betweenss)
 } 
 plot(1:15, wss, type="b", xlab="Number of Clusters",ylab="Within groups sum of squares")
 
@@ -72,3 +72,75 @@ data = cbind(data,groups)
 
 # draw dendogram with red borders around the 2 clusters
 rect.hclust(fit, k=2, border="red")
+
+
+################ Clustering validation #################################
+#Load data
+data = iris[,-c(5)]
+data = scale(data)
+
+#Loading desired package
+install.packages("clValid")
+library(clValid)
+
+# Internal Validation
+clmethods <- c("hierarchical","kmeans","pam")
+internval <- clValid(data, nClust = 2:5, clMethods = clmethods, validation = "internal")
+
+# Summary
+summary(internval)
+optimalScores(internval)
+
+# Hierarchical clustering with two clusters was found the best clustering algorithm in each case (i.e., for connectivity, Dunn and Silhouette measures)
+plot(internval)
+
+# Stability measure Validation
+clmethods <- c("hierarchical","kmeans","pam")
+stabval <- clValid(data, nClust = 2:6, clMethods = clmethods,
+                   validation = "stability")
+
+# Display only optimal Scores
+summary(stabval)
+optimalScores(stab)
+
+# External Clustering Validation
+library(fpc)
+
+# K-Means Cluster Analysis
+fit <- kmeans(data,2)
+
+# Compute cluster stats
+species <- as.numeric(iris$Species)
+clust_stats <- cluster.stats(d = dist(data), species, fit$cluster)
+
+# Corrected Rand index and VI Score
+# Rand Index should be maximized and VI score should be minimized
+clust_stats$corrected.rand
+clust_stats$vi
+
+# k means Cluster Analysis
+fit <- kmeans(data,2)
+
+# Compute cluster stats
+species <- as.numeric(iris$Species)
+clust_stats <- cluster.stats(d = dist(data), species, fit$cluster)
+
+# Corrected Rand index and VI Score
+# Rand Index should be maximized and VI score should be minimized
+clust_stats$corrected.rand
+clust_stats$vi
+
+# Same analysis for Ward Hierarchical Clustering
+d2 <- dist(data, method = "euclidean")
+fit2 <- hclust(d2, method="ward.D2")
+
+# cluster assignment (members)
+groups <- cutree(fit2, k=2)
+
+# Compute cluster stats
+clust_stats2 <- cluster.stats(d = dist(data), species, groups)
+
+# Corrected Rand index and VI Score
+# Rand Index should be maximized and VI score should be minimized
+clust_stats2$corrected.rand
+clust_stats2$vi
